@@ -1,0 +1,14 @@
+# XSINT - Required Dependencies
+# Install with: pip install -r requirements.txt
+
+# HTTP requests
+requests
+
+# Phone number parsing and validation
+phonenumbers
+
+# DNS resolution
+dnspython
+
+# Email validation
+email-validator
