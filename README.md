@@ -1,16 +1,4 @@
-<<<<<<< HEAD
-# KISS - Keep It Simple, Stupid
-
-<div align="center">
-
-```
-█        ▀                 
- █   ▄  ▄▄▄     ▄▄▄▄    ▄▄▄▄  
-█ ▄▀     █    █   ▀  █   ▀▀▄ ▄ ▀▀▄▄ 
-█  ▀▄  ▄▄▄█▄▄▄  ▀▀▄▄▀  ▄▄▄▄▀  ▄▄▄▄▀ 
-█  ▀   ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄ 
-           modern OSINT toolkit             
-```
+# KISS - A modern OSINT Toolkit.
 
 A modern OSINT toolkit for comprehensive intelligence gathering with structured query support.
 
@@ -265,16 +253,13 @@ flake8 kiss/
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Security
-
-For security vulnerabilities, please email security@example.com rather than using public issues.
-
 ## Acknowledgments
 
 - **Have I Been Pwned** for breach data
 - **IPInfo** for IP intelligence
 - **OpenStreetMap** for geocoding
 - **phonenumbers** for phone validation
+- **opencode** for allow me to vibe code this entire project :)
 - The Python async community for inspiration
 
 ## Support
@@ -288,12 +273,4 @@ For security vulnerabilities, please email security@example.com rather than usin
 
 <div align="center">
 
-**Keep It Simple, Stupid**
-
 Built with ❤️ for the OSINT community
-
-</div>
-=======
-# kiss
-A modern OSINT toolkit.
->>>>>>> 468e99c8657903842932317ae9129c44d764fdeb
