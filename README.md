@@ -253,10 +253,6 @@ flake8 kiss/
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Security
-
-For security vulnerabilities, please email security@example.com rather than using public issues.
-
 ## Acknowledgments
 
 - **Have I Been Pwned** for breach data
