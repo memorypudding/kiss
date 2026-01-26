@@ -3,14 +3,13 @@
 
 <div align="center">
 
-```
-                            
- █        ▀                 
- █   ▄  ▄▄▄     ▄▄▄    ▄▄▄  
- █ ▄▀     █    █   ▀  █   ▀ 
- █▀█      █     ▀▀▀▄   ▀▀▀▄ 
- █  ▀▄  ▄▄█▄▄  ▀▄▄▄▀  ▀▄▄▄▀
-    modern OSINT toolkit                               
+```                            
+█        ▀                 
+█   ▄  ▄▄▄     ▄▄▄    ▄▄▄  
+█ ▄▀     █    █   ▀  █   ▀ 
+█▀█      █     ▀▀▀▄   ▀▀▀▄ 
+█  ▀▄  ▄▄█▄▄  ▀▄▄▄▀  ▀▄▄▄▀
+  A modern OSINT toolkit
 ```
 
 A modern OSINT toolkit for comprehensive intelligence gathering with structured query support.
