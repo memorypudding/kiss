@@ -259,6 +259,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **IPInfo** for IP intelligence
 - **OpenStreetMap** for geocoding
 - **phonenumbers** for phone validation
+- **opencode** for allow me to vibe code this entire project :)
 - The Python async community for inspiration
 
 ## Support
