@@ -1,15 +1,16 @@
 """Phone Analyzer Plugin.
 
 Analyzes phone numbers using the phonenumbers library.
+Fully async implementation for high-performance scanning.
 """
 
 from typing import Any, Callable, Dict, List
 
-from ..base import BasePlugin, PluginMetadata
+from ..async_base import AsyncBasePlugin, PluginMetadata
 
 
-class PhoneAnalyzerPlugin(BasePlugin):
-    """Phone number analysis plugin."""
+class PhoneAnalyzerPlugin(AsyncBasePlugin):
+    """Phone number analysis plugin (async)."""
 
     # Line type mapping
     LINE_TYPE_MAPPING = {
@@ -35,21 +36,26 @@ class PhoneAnalyzerPlugin(BasePlugin):
             name="phone_analyzer",
             display_name="Phone Analyzer",
             description="Analyze phone numbers using phonenumbers library",
-            version="1.0.0",
+            version="2.0.0",
             category="Phone Intelligence",
             supported_scan_types=["PHONE"],
             api_key_requirements=[],  # No API key - uses local library
             rate_limit=1000,  # Local processing, no real limit
             timeout=10,
+            author="KISS Team",
         )
 
-    def scan(
+    async def scan_async(
         self,
         target: str,
         scan_type: str,
         progress_callback: Callable[[float], None],
     ) -> List[Dict[str, Any]]:
-        """Execute phone number analysis."""
+        """Execute phone number analysis asynchronously.
+
+        Note: This plugin uses a local library (phonenumbers) so async
+        provides minimal benefit, but keeps consistent API.
+        """
         results: List[Dict[str, Any]] = []
         progress_callback(0.1)
 
@@ -60,7 +66,7 @@ class PhoneAnalyzerPlugin(BasePlugin):
             results.append(
                 self._create_result(
                     "Phone Analysis",
-                    "phonenumbers library not installed",
+                    "phonenumbers library not installed (pip install phonenumbers)",
                     threat_level="LOW",
                 )
             )
@@ -125,6 +131,7 @@ class PhoneAnalyzerPlugin(BasePlugin):
                         "Line Type",
                         line_desc,
                         threat_level=threat_level,
+                        metadata={"line_type_code": number_type},
                     )
                 )
 
@@ -154,13 +161,15 @@ class PhoneAnalyzerPlugin(BasePlugin):
             # Timezone information
             timezones = timezone.time_zones_for_number(parsed_number)
             if timezones:
-                tz_display = ", ".join(list(timezones)[:2])
-                if len(timezones) > 2:
-                    tz_display += f" (+{len(timezones) - 2} more)"
+                tz_list = list(timezones)
+                tz_display = ", ".join(tz_list[:2])
+                if len(tz_list) > 2:
+                    tz_display += f" (+{len(tz_list) - 2} more)"
                 results.append(
                     self._create_result(
                         "Timezone(s)",
                         tz_display,
+                        metadata={"timezones": tz_list},
                     )
                 )
 
@@ -231,6 +240,19 @@ class PhoneAnalyzerPlugin(BasePlugin):
                         threat_level="LOW",
                     )
                 )
+
+            # Check if number is geographical
+            try:
+                is_geo = phonenumberutil.is_number_geographical(parsed_number)
+                if is_geo:
+                    results.append(
+                        self._create_result(
+                            "Geographic",
+                            "This is a geographic (landline) number",
+                        )
+                    )
+            except Exception:
+                pass
 
         except Exception as e:
             results.append(

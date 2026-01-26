@@ -59,6 +59,8 @@ API_ENDPOINTS = {
     "GRATAR_API": "https://en.gravatar.com",
     "NOMINATIM_API": "https://nominatim.openstreetmap.org",
     "HUDSON_ROCK_API": "https://api.hudsonrock.com/api/json/v2/stealer-info",
+    "GOOGLE_GEOLOCATION_API": "https://www.googleapis.com/geolocation/v1/geolocate",
+    "WIGLE_API": "https://api.wigle.net/api/v2",
 }
 
 # Request headers
@@ -87,6 +89,10 @@ INPUT_PATTERNS = {
     "hash_sha1": r"^[a-fA-F0-9]{40}$",
     "hash_sha256": r"^[a-fA-F0-9]{64}$",
     "hash_sha512": r"^[a-fA-F0-9]{128}$",
+    # BSSID format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF
+    "bssid": r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$",
+    # SSID: 1-32 characters (printable ASCII or UTF-8)
+    "ssid": r"^.{1,32}$",
 }
 
 # Color scheme definitions

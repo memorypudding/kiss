@@ -2,16 +2,17 @@
 
 Checks password hashes against the Have I Been Pwned Passwords database
 using the k-anonymity model.
+Fully async implementation for high-performance scanning.
 """
 
 import hashlib
 from typing import Any, Callable, Dict, List
 
-from ..base import BasePlugin, PluginMetadata
+from ..async_base import AsyncBasePlugin, PluginMetadata
 
 
-class HIBPPasswordsPlugin(BasePlugin):
-    """HIBP Passwords plugin using k-anonymity."""
+class HIBPPasswordsPlugin(AsyncBasePlugin):
+    """HIBP Passwords plugin using k-anonymity (async)."""
 
     BASE_URL = "https://api.pwnedpasswords.com/range"
 
@@ -21,21 +22,22 @@ class HIBPPasswordsPlugin(BasePlugin):
             name="hibp_passwords",
             display_name="HIBP Passwords",
             description="Check password hashes against HIBP database",
-            version="1.0.0",
+            version="2.0.0",
             category="Hash Lookup",
             supported_scan_types=["HASH"],
             api_key_requirements=[],  # No API key required (k-anonymity)
             rate_limit=100,
             timeout=15,
+            author="KISS Team",
         )
 
-    def scan(
+    async def scan_async(
         self,
         target: str,
         scan_type: str,
         progress_callback: Callable[[float], None],
     ) -> List[Dict[str, Any]]:
-        """Execute password hash check."""
+        """Execute password hash check asynchronously."""
         results: List[Dict[str, Any]] = []
         progress_callback(0.2)
 
@@ -58,82 +60,100 @@ class HIBPPasswordsPlugin(BasePlugin):
         suffix = sha1_hash[5:]
 
         url = f"{self.BASE_URL}/{prefix}"
-        response = self._make_request(url)
-        progress_callback(0.6)
 
-        if response is None:
-            results.append(
-                self._create_result(
-                    "Password Check",
-                    "Service unavailable",
-                )
-            )
-            progress_callback(1.0)
-            return results
+        try:
+            await self._rate_limit()
 
-        if response.status_code == 200:
-            # Search for our suffix in the response
-            found = False
-            count = 0
+            async with self.session.get(
+                url,
+                timeout=self.metadata.timeout,
+            ) as response:
+                progress_callback(0.6)
 
-            for line in response.text.splitlines():
-                parts = line.strip().split(":")
-                if len(parts) == 2:
-                    hash_suffix, occurrences = parts
-                    if hash_suffix.upper() == suffix.upper():
-                        found = True
-                        count = int(occurrences)
-                        break
+                if response.status == 200:
+                    text = await response.text()
 
-            if found:
-                results.append(
-                    self._create_result(
-                        "Password Breach",
-                        f"PWNED - Found {count:,} times in breaches",
-                        threat_level="CRITICAL",
-                    )
-                )
+                    # Search for our suffix in the response
+                    found = False
+                    count = 0
 
-                # Add context based on count
-                if count > 1000000:
-                    results.append(
-                        self._create_result(
-                            "Risk Level",
-                            "Extremely common password - do not use",
-                            threat_level="CRITICAL",
+                    for line in text.splitlines():
+                        parts = line.strip().split(":")
+                        if len(parts) == 2:
+                            hash_suffix, occurrences = parts
+                            if hash_suffix.upper() == suffix.upper():
+                                found = True
+                                count = int(occurrences)
+                                break
+
+                    if found:
+                        results.append(
+                            self._create_result(
+                                "Password Breach",
+                                f"PWNED - Found {count:,} times in breaches",
+                                threat_level="CRITICAL",
+                                metadata={"occurrences": count},
+                            )
                         )
-                    )
-                elif count > 100000:
-                    results.append(
-                        self._create_result(
-                            "Risk Level",
-                            "Very common password - high risk",
-                            threat_level="HIGH",
+
+                        # Add context based on count
+                        if count > 1000000:
+                            results.append(
+                                self._create_result(
+                                    "Risk Level",
+                                    "Extremely common password - do not use",
+                                    threat_level="CRITICAL",
+                                )
+                            )
+                        elif count > 100000:
+                            results.append(
+                                self._create_result(
+                                    "Risk Level",
+                                    "Very common password - high risk",
+                                    threat_level="HIGH",
+                                )
+                            )
+                        elif count > 1000:
+                            results.append(
+                                self._create_result(
+                                    "Risk Level",
+                                    "Common password - moderate risk",
+                                    threat_level="MEDIUM",
+                                )
+                            )
+                        else:
+                            results.append(
+                                self._create_result(
+                                    "Risk Level",
+                                    "Less common but still exposed",
+                                    threat_level="MEDIUM",
+                                )
+                            )
+                    else:
+                        results.append(
+                            self._create_result(
+                                "Password Breach",
+                                "Not found in known breaches",
+                            )
                         )
-                    )
-                elif count > 1000:
-                    results.append(
-                        self._create_result(
-                            "Risk Level",
-                            "Common password - moderate risk",
-                            threat_level="MEDIUM",
-                        )
-                    )
+
                 else:
                     results.append(
                         self._create_result(
-                            "Risk Level",
-                            "Less common but still exposed",
-                            threat_level="MEDIUM",
+                            "Password Check",
+                            f"Service error: HTTP {response.status}",
+                            threat_level="LOW",
                         )
                     )
-            else:
-                results.append(
-                    self._create_result(
-                        "Password Breach",
-                        "Not found in known breaches",
-                    )
+
+        except Exception as e:
+            results.append(
+                self._create_result(
+                    "Password Check Error",
+                    f"Request failed: {str(e)}",
+                    threat_level="LOW",
                 )
+            )
 
         # Add hash info
         results.append(

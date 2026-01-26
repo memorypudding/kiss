@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Type
 
 from .base import APIKeyRequirement, BasePlugin, PluginMetadata
+from .async_base import AsyncBasePlugin
 
 
 class PluginRegistry:
@@ -68,6 +69,7 @@ class PluginRegistry:
             "hash_lookup",
             "phone",
             "username",
+            "wifi",
         ]
 
         for category in categories:
@@ -123,7 +125,7 @@ class PluginRegistry:
                 print(f"Warning: Could not load custom plugin {py_file}: {e}")
 
     def _register_module_plugins(self, module) -> None:
-        """Find and register BasePlugin subclasses in a module.
+        """Find and register BasePlugin or AsyncBasePlugin subclasses in a module.
 
         Args:
             module: Python module to scan for plugins
@@ -131,13 +133,21 @@ class PluginRegistry:
         for name in dir(module):
             obj = getattr(module, name)
 
-            # Check if it's a class that inherits from BasePlugin
-            if (
-                isinstance(obj, type)
-                and issubclass(obj, BasePlugin)
-                and obj is not BasePlugin
-            ):
-                self.register(obj)
+            # Check if it's a class that inherits from BasePlugin or AsyncBasePlugin
+            if isinstance(obj, type):
+                # Check for AsyncBasePlugin first (newer async plugins)
+                if (
+                    issubclass(obj, AsyncBasePlugin)
+                    and obj is not AsyncBasePlugin
+                ):
+                    self.register(obj)
+                # Also check for BasePlugin (older sync plugins)
+                elif (
+                    issubclass(obj, BasePlugin)
+                    and obj is not BasePlugin
+                    and not issubclass(obj, AsyncBasePlugin)  # Avoid double registration
+                ):
+                    self.register(obj)
 
     def register(self, plugin_class: Type[BasePlugin]) -> bool:
         """Register a plugin class.
@@ -269,6 +279,22 @@ class PluginRegistry:
         """Reset the registry (mainly for testing)."""
         self._plugins = {}
         self._initialized = False
+
+    async def discover_plugins_async(
+        self, custom_paths: Optional[List[Path]] = None
+    ) -> None:
+        """Async version of discover_plugins for use with async engine.
+
+        Plugin discovery is CPU-bound (file I/O and imports), so this
+        just wraps the sync version. The async signature allows it to
+        be called from async code without blocking warnings.
+
+        Args:
+            custom_paths: Additional paths to search for plugins
+        """
+        # Plugin discovery is mostly synchronous (file scanning, imports)
+        # We just call the sync version here
+        self.discover_plugins(custom_paths)
 
 
 # Global registry instance getter

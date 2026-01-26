@@ -2,11 +2,12 @@
 
 Main async engine for orchestrating OSINT scans across multiple services.
 Uses the async plugin system for high-performance concurrent scanning.
+Integrates with the query parser for structured query support.
 """
 
 import asyncio
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import aiohttp
 
@@ -14,6 +15,7 @@ from kiss.config import get_config
 from kiss.constants import ScanStatus, ScanType
 from kiss.models import ScanResult, ThreatLevel
 from kiss.scanner.detectors import detect_input_type, extract_metadata
+from kiss.query_parser import ParsedQuery, parse_query, get_parser
 from kiss.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -99,6 +101,30 @@ class AsyncOSINTEngine:
     def detect_input_type(self, target: str) -> Optional[str]:
         """Detect the type of input target."""
         return detect_input_type(target)
+
+    def parse_query(self, query: str) -> ParsedQuery:
+        """Parse a query string using the query parser.
+
+        Supports both simple targets and structured field:value syntax.
+
+        Args:
+            query: Raw query string (e.g., "user@example.com" or 'email:"test@example.com"')
+
+        Returns:
+            ParsedQuery object with extracted information
+        """
+        return parse_query(query)
+
+    def get_wifi_components(self, parsed: ParsedQuery) -> Tuple[Optional[str], Optional[str]]:
+        """Extract BSSID and SSID from a parsed WiFi query.
+
+        Args:
+            parsed: ParsedQuery object
+
+        Returns:
+            Tuple of (bssid, ssid)
+        """
+        return get_parser().get_wifi_components(parsed)
 
     async def _scan_with_plugins_async(
         self,
@@ -416,6 +442,94 @@ class AsyncOSINTEngine:
         result.scan_duration = time.time() - start_time
         return result
 
+    async def scan_wifi_async(
+        self, target: str, progress_callback: Callable[[float], None]
+    ) -> ScanResult:
+        """Async WiFi (BSSID/SSID) scanning.
+
+        Supports multiple input formats:
+        - Simple BSSID: AA:BB:CC:DD:EE:FF
+        - BSSID|SSID format: AA:BB:CC:DD:EE:FF|NetworkName
+        - Structured query: bssid:"AA:BB:CC:DD:EE:FF" ssid:"NetworkName"
+        """
+        result = ScanResult(
+            scan_type=ScanType.WIFI,
+            target=target,
+            status=ScanStatus.RUNNING,
+        )
+        start_time = time.time()
+
+        try:
+            progress_callback(0.05)
+
+            # Parse the query to extract BSSID/SSID components
+            parsed = self.parse_query(target)
+            bssid, ssid = self.get_wifi_components(parsed)
+
+            # Add parsed info to metadata
+            result.metadata["bssid"] = bssid
+            result.metadata["ssid"] = ssid
+
+            # Add BSSID/SSID info to results
+            if bssid:
+                result.add_info("BSSID", bssid, source="Query Parser")
+            if ssid:
+                result.add_info("SSID", ssid, source="Query Parser")
+
+            # Run plugins with the original target
+            # Plugins will extract BSSID/SSID as needed
+            plugin_results = await self._scan_with_plugins_async(
+                target, "WIFI", progress_callback
+            )
+            for row in plugin_results:
+                if "threat_level" in row and isinstance(row["threat_level"], str):
+                    row["threat_level"] = ThreatLevel[row["threat_level"]]
+                result.add_info(**row)
+
+            progress_callback(1.0)
+            result.status = ScanStatus.COMPLETED
+
+        except Exception as e:
+            logger.error(f"WiFi scan failed: {e}")
+            result.status = ScanStatus.FAILED
+            result.error_message = str(e)
+
+        result.scan_duration = time.time() - start_time
+        return result
+
+    async def scan_domain_async(
+        self, target: str, progress_callback: Callable[[float], None]
+    ) -> ScanResult:
+        """Async domain scanning."""
+        result = ScanResult(
+            scan_type=ScanType.DOMAIN,
+            target=target,
+            status=ScanStatus.RUNNING,
+        )
+        start_time = time.time()
+
+        try:
+            progress_callback(0.05)
+
+            plugin_results = await self._scan_with_plugins_async(
+                target, "DOMAIN", progress_callback
+            )
+            for row in plugin_results:
+                if "threat_level" in row and isinstance(row["threat_level"], str):
+                    row["threat_level"] = ThreatLevel[row["threat_level"]]
+                result.add_info(**row)
+
+            progress_callback(1.0)
+            result.status = ScanStatus.COMPLETED
+
+        except Exception as e:
+            logger.error(f"Domain scan failed: {e}")
+            result.status = ScanStatus.FAILED
+            result.error_message = str(e)
+
+        result.scan_duration = time.time() - start_time
+        return result
+
     # === Generic Async Scan Method ===
 
     async def scan_async(
@@ -465,6 +579,10 @@ class AsyncOSINTEngine:
             return await self.scan_address_async(target, progress_callback)
         elif scan_type_upper == "HASH":
             return await self.scan_hash_async(target, progress_callback)
+        elif scan_type_upper == "WIFI":
+            return await self.scan_wifi_async(target, progress_callback)
+        elif scan_type_upper == "DOMAIN":
+            return await self.scan_domain_async(target, progress_callback)
         else:
             result = ScanResult(
                 scan_type=ScanType.EMAIL,
@@ -554,6 +672,32 @@ class AsyncOSINTEngine:
         finally:
             loop.close()
 
+    def scan_wifi(
+        self, target: str, progress_callback: Callable[[float], None]
+    ) -> ScanResult:
+        """Synchronous wrapper for WiFi scanning."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                self.scan_wifi_async(target, progress_callback)
+            )
+        finally:
+            loop.close()
+
+    def scan_domain(
+        self, target: str, progress_callback: Callable[[float], None]
+    ) -> ScanResult:
+        """Synchronous wrapper for domain scanning."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                self.scan_domain_async(target, progress_callback)
+            )
+        finally:
+            loop.close()
+
     def scan(
         self,
         target: str,
@@ -566,6 +710,78 @@ class AsyncOSINTEngine:
         try:
             return loop.run_until_complete(
                 self.scan_async(target, scan_type, progress_callback)
+            )
+        finally:
+            loop.close()
+
+    async def scan_query_async(
+        self,
+        query: str,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> ScanResult:
+        """Execute a scan using the query parser system.
+
+        This method supports:
+        - Simple targets: user@example.com, 192.168.1.1, +1234567890
+        - Structured queries: email:"user@example.com" ip:"8.8.8.8"
+        - Combined queries: name:"John Doe" location:"New York"
+        - WiFi queries: bssid:"AA:BB:CC:DD:EE:FF" ssid:"MyNetwork"
+
+        Args:
+            query: Raw query string
+            progress_callback: Optional progress callback
+
+        Returns:
+            ScanResult with findings
+        """
+        if progress_callback is None:
+            progress_callback = lambda x: None
+
+        # Parse the query
+        parsed = self.parse_query(query)
+
+        if not parsed.is_valid:
+            result = ScanResult(
+                scan_type=ScanType.EMAIL,  # Default
+                target=query,
+                status=ScanStatus.FAILED,
+            )
+            result.error_message = "; ".join(parsed.errors)
+            return result
+
+        # Determine target and scan type from parsed query
+        target = parsed.primary_target
+        scan_type = parsed.scan_type
+
+        if not scan_type:
+            result = ScanResult(
+                scan_type=ScanType.EMAIL,
+                target=query,
+                status=ScanStatus.FAILED,
+            )
+            result.error_message = "Could not determine query type"
+            return result
+
+        # For structured queries, pass the original query to allow plugins
+        # to extract multiple fields if needed
+        if parsed.query_type == "structured":
+            # Pass the full query for structured queries
+            return await self.scan_async(query, scan_type, progress_callback)
+        else:
+            # For simple queries, use the detected target
+            return await self.scan_async(target, scan_type, progress_callback)
+
+    def scan_query(
+        self,
+        query: str,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> ScanResult:
+        """Synchronous wrapper for query-based scanning."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                self.scan_query_async(query, progress_callback)
             )
         finally:
             loop.close()

@@ -2,6 +2,7 @@
 
 OpenCode-inspired design with centered search, live themes, and modular views.
 Enhanced with dynamic API key management and improved navigation.
+Supports structured queries with field:value syntax.
 """
 
 import curses
@@ -13,6 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import get_config
 from ..scanner.detectors import detect_input_type
+from ..query_parser import parse_query, get_parser
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -308,6 +310,10 @@ class ModernTUI:
                 result = self.engine.scan_address(target, progress_update)
             elif scan_type == "HASH":
                 result = self.engine.scan_hash(target, progress_update)
+            elif scan_type == "WIFI":
+                result = self.engine.scan_wifi(target, progress_update)
+            elif scan_type == "DOMAIN":
+                result = self.engine.scan_domain(target, progress_update)
             else:
                 self._add_result(f"Unknown scan type: {scan_type}", "error")
                 self.is_scanning = False
@@ -351,15 +357,35 @@ class ModernTUI:
             self.running = False
         elif key == 10:  # Enter
             if self.input_buffer.strip():
-                target = self.input_buffer.strip()
-                scan_type = detect_input_type(target)
-                if scan_type:
+                query = self.input_buffer.strip()
+
+                # Use query parser for structured queries
+                parsed = parse_query(query)
+
+                if parsed.is_valid and parsed.scan_type:
                     self.current_view = View.RESULTS
                     self.results_scroll = 0
+
+                    # Pass the original query for structured queries
+                    # Pass the primary target for simple queries
+                    target = query if parsed.query_type == "structured" else parsed.primary_target
+                    scan_type = parsed.scan_type
+
                     thread = threading.Thread(
                         target=self.run_scan, args=(target, scan_type), daemon=True
                     )
                     thread.start()
+                else:
+                    # Fallback to simple detection for backward compatibility
+                    scan_type = detect_input_type(query)
+                    if scan_type:
+                        self.current_view = View.RESULTS
+                        self.results_scroll = 0
+                        thread = threading.Thread(
+                            target=self.run_scan, args=(query, scan_type), daemon=True
+                        )
+                        thread.start()
+
                 self.input_buffer = ""
         elif key in (curses.KEY_BACKSPACE, 127, 8):
             self.input_buffer = self.input_buffer[:-1]
@@ -724,7 +750,8 @@ class ModernTUI:
 
         # Hint text below search
         hints = [
-            "Enter IP, email, phone, @username, or address",
+            "IP, email, phone, @username, address, BSSID, or domain",
+            'Structured: email:"test@example.com" bssid:"AA:BB:CC:DD:EE:FF"',
         ]
         for i, hint in enumerate(hints):
             hint_x = (w - len(hint)) // 2
@@ -1087,6 +1114,13 @@ class ModernTUI:
             ("  Username        @johndoe", "text"),
             ("  Address         123 Main St, City", "text"),
             ("  Hash            MD5, SHA1, SHA256...", "text"),
+            ("  BSSID/WiFi      AA:BB:CC:DD:EE:FF", "text"),
+            ("  Domain          example.com", "text"),
+            ("", "text"),
+            ("STRUCTURED QUERIES", "highlight"),
+            ('  email:"user@example.com"', "text"),
+            ('  bssid:"AA:BB:CC:DD:EE:FF" ssid:"MyNetwork"', "text"),
+            ('  ip:"8.8.8.8" phone:"+1234567890"', "text"),
             ("", "text"),
             ("KEYBOARD SHORTCUTS", "highlight"),
             ("  F1              Show this help", "text"),

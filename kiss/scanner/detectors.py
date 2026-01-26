@@ -29,6 +29,10 @@ def detect_input_type(input_value: str) -> Optional[str]:
     if is_ip_address(input_value):
         return ScanType.IP.value
 
+    # Check for BSSID/WiFi (before hash since both are hex)
+    if is_bssid(input_value):
+        return ScanType.WIFI.value
+
     # Check for hash patterns (before email since hashes can contain @)
     hash_type = detect_hash_type(input_value)
     if hash_type:
@@ -41,6 +45,10 @@ def detect_input_type(input_value: str) -> Optional[str]:
     # Check for phone number
     if is_phone_number(input_value):
         return ScanType.PHONE.value
+
+    # Check for domain (before username since domains can look like usernames)
+    if is_domain(input_value):
+        return ScanType.DOMAIN.value
 
     # Check for username
     if is_username(input_value):
@@ -159,6 +167,79 @@ def is_address(address_str: str) -> bool:
 
     # Consider it an address if it matches at least 2 patterns
     return matches >= 2
+
+
+def is_bssid(bssid_str: str) -> bool:
+    """
+    Check if string is a valid BSSID (MAC address).
+
+    BSSID formats:
+    - AA:BB:CC:DD:EE:FF
+    - AA-BB-CC-DD-EE-FF
+    - AABBCCDDEEFF (no separator)
+
+    Also checks for BSSID|SSID combined format.
+
+    Args:
+        bssid_str: The string to check
+
+    Returns:
+        True if valid BSSID, False otherwise
+    """
+    # Check for BSSID|SSID format
+    if "|" in bssid_str:
+        bssid_str = bssid_str.split("|")[0].strip()
+
+    # Standard BSSID pattern with colon or dash separators
+    pattern = re.compile(INPUT_PATTERNS["bssid"])
+    if pattern.match(bssid_str):
+        return True
+
+    # Also check for no-separator format (12 hex chars)
+    if len(bssid_str) == 12 and re.match(r"^[0-9A-Fa-f]{12}$", bssid_str):
+        return True
+
+    return False
+
+
+def is_domain(domain_str: str) -> bool:
+    """
+    Check if string is a valid domain name.
+
+    Args:
+        domain_str: The string to check
+
+    Returns:
+        True if valid domain, False otherwise
+    """
+    # Must have at least one dot
+    if "." not in domain_str:
+        return False
+
+    # Should not contain @ (that's an email)
+    if "@" in domain_str:
+        return False
+
+    # Should not start with a number followed by dots (that might be an IP)
+    if re.match(r"^\d+\.\d+", domain_str):
+        return False
+
+    # Check domain pattern
+    pattern = re.compile(INPUT_PATTERNS["domain"])
+    if not pattern.match(domain_str):
+        return False
+
+    # Check TLD exists and is valid length (2-10 chars)
+    parts = domain_str.split(".")
+    tld = parts[-1]
+    if len(tld) < 2 or len(tld) > 10:
+        return False
+
+    # TLD should be alphabetic
+    if not tld.isalpha():
+        return False
+
+    return True
 
 
 def detect_hash_type(hash_str: str) -> Optional[str]:
@@ -300,6 +381,45 @@ def extract_metadata(input_value: str, input_type: str) -> dict:
         except Exception:
             # Fallback to basic analysis
             pass
+
+    elif input_type == ScanType.WIFI.value:
+        # Extract BSSID and optional SSID
+        bssid = input_value
+        ssid = None
+
+        if "|" in input_value:
+            parts = input_value.split("|", 1)
+            bssid = parts[0].strip()
+            ssid = parts[1].strip() if len(parts) > 1 else None
+
+        # Normalize BSSID format
+        bssid = bssid.replace("-", ":").upper()
+
+        # Extract OUI (first 3 octets) for vendor lookup
+        oui = ":".join(bssid.split(":")[:3]) if ":" in bssid else bssid[:8]
+
+        metadata.update(
+            {
+                "bssid": bssid,
+                "ssid": ssid,
+                "oui": oui,
+                "has_ssid": ssid is not None,
+            }
+        )
+
+    elif input_type == ScanType.DOMAIN.value:
+        parts = input_value.lower().split(".")
+        tld = parts[-1] if parts else ""
+        sld = parts[-2] if len(parts) > 1 else ""
+
+        metadata.update(
+            {
+                "tld": tld,
+                "sld": sld,
+                "subdomain": ".".join(parts[:-2]) if len(parts) > 2 else None,
+                "level": len(parts),
+            }
+        )
 
     return metadata
 
