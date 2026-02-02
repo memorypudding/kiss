@@ -5,7 +5,7 @@
 ▘ ▘▀▘▀▀ ▀▀
 ```
 
-**Keep It Simple Scanner** — a minimal OSINT tool.
+**Keeping Identity Search Simple.** — a minimal OSINT tool.
 
 ## Install
 
@@ -13,6 +13,7 @@
 git clone https://github.com/memorypudding/kiss.git
 cd kiss
 pip install -r requirements.txt
+pip install .
 ```
 
 ## Usage
