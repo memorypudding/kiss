@@ -1,23 +1,5 @@
-# KISS - Required Dependencies
-# Install with: pip install -r requirements.txt
-
-# HTTP requests (sync - for backward compatibility)
-requests
-
-# Async HTTP client (recommended for new plugins)
-aiohttp>=3.8.0
-
-# Async file operations
-aiofiles>=23.0.0
-
-# Async timeout handling
-async-timeout>=4.0.0
-
-# Phone number parsing and validation
+rich
+aiohttp
+aiohttp-socks
 phonenumbers
-
-# DNS resolution
-dnspython
-
-# Email validation
-email-validator
+hashid

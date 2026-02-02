@@ -1,221 +1,130 @@
-"""KISS - Keep It Simple, Stupid
-
-Main entry point for KISS application with enhanced TUI support.
-"""
-
+import argparse
+import asyncio
 import sys
-import curses
-from pathlib import Path
+from rich.console import Console
+from .core import KissEngine
+from .config import get_config
+from .ui import print_banner, print_results
 
-from kiss.utils.logging import get_logger
-from kiss.config import get_config
-from kiss.engine import get_engine
-
-logger = get_logger(__name__)
-
-
-def run_curses_tui():
-    """Run enhanced curses TUI with robust error handling."""
-    try:
-        # Initialize curses with proper error handling
-        curses.wrapper(lambda stdscr: run_curses_app(stdscr))
-    except KeyboardInterrupt:
-        print("\nKISS interrupted by user. Goodbye!")
-        return 0
-    except Exception as e:
-        logger.error(f"TUI Error: {e}")
-        print(f"Failed to start enhanced TUI: {e}")
-        print("Falling back to simple mode...")
-        return run_simple_tui()
-
-
-def run_curses_app(stdscr):
-    """Initialize and run curses application."""
-    try:
-        from kiss.tui import ModernTUI
-
-        # Create modern TUI
-        tui = ModernTUI(stdscr)
-
-        # Get the real OSINT engine
-        engine = get_engine()
-
-        # Set the engine
-        tui.set_engine(engine)
-
-        # Show welcome message
-        tui.log_callback("KISS - Keep It Simple, Stupid v2.0", "primary")
-        tui.log_callback("Real OSINT Engine loaded with live API integration", "accent")
-        tui.log_callback("", "text")
-        tui.log_callback("Available Scan Types:", "primary")
-        tui.log_callback(
-            "   - IP Address: Geolocation, Organization, Stealer Malware", "text_muted"
-        )
-        tui.log_callback(
-            "   - Email: Breach Detection, Gravatar, Stealer Logs", "text_muted"
-        )
-        tui.log_callback("   - Phone: Format Analysis, Stealer Check", "text_muted")
-        tui.log_callback("   - Username: Platform Enumeration", "text_muted")
-        tui.log_callback("   - Address: Geocoding via Nominatim", "text_muted")
-        tui.log_callback("", "text")
-
-        # Show configured services
-        config = get_config()
-        services = config.list_enabled_services()
-        tui.log_callback(f"Enabled Services: {len(services)}", "info")
-        tui.log_callback(
-            f"   {', '.join(services[:5])}{'...' if len(services) > 5 else ''}",
-            "text_muted",
-        )
-        tui.log_callback("", "text")
-
-        tui.log_callback(
-            "Enter a target (IP, email, phone, username, or address) to scan", "accent"
-        )
-        tui.log_callback("Type 'exit' or press Ctrl+C to quit", "text")
-        tui.log_callback("", "text")
-
-        # Start main loop
-        tui.loop()
-
-    except Exception as e:
-        logger.exception(f"Error in curses application: {e}")
-        raise
-
-
-def run_simple_tui():
-    """Run a simple TUI fallback without curses."""
-    from kiss.scanner.detectors import detect_input_type
-
-    print("=" * 60)
-    print("  KISS - Keep It Simple, Stupid v2.0")
-    print("  Simple Mode (no curses)")
-    print("=" * 60)
-    print()
-    print("Supported Scan Types:")
-    print("  - IP Address     : Geolocation, ISP, Stealer Malware Check")
-    print("  - Email Address  : Breach Detection, Gravatar, Stealer Logs")
-    print("  - Phone Number   : Enhanced Analysis with phonenumbers, Stealer Check")
-    print("  - Username       : Platform Enumeration")
-    print("  - Physical Addr  : Geocoding via OpenStreetMap")
-    print()
-
-    # Get engine
-    engine = get_engine()
-
-    while True:
-        try:
-            target = input("\nEnter target (or 'exit' to quit): ").strip()
-
-            if not target:
-                continue
-
-            if target.lower() in ["exit", "quit", "q"]:
-                print("\nGoodbye!")
-                break
-
-            # Detect input type
-            scan_type = detect_input_type(target)
-            if not scan_type:
-                print(f"Could not detect input type for: {target}")
-                print("Try: IP, email, phone number, domain, @username, or address")
-                continue
-
-            print(f"\nDetected: {scan_type}")
-            print(f"Scanning: {target}")
-            print("-" * 40)
-
-            # Run appropriate scan
-            def progress(val):
-                pass  # Simple mode doesn't show progress
-
-            if scan_type == "IP":
-                result = engine.scan_ip(target, progress)
-            elif scan_type == "EMAIL":
-                result = engine.scan_email(target, progress)
-            elif scan_type == "PHONE":
-                result = engine.scan_phone(target, progress)
-            elif scan_type == "USERNAME":
-                result = engine.scan_username(target, progress)
-            elif scan_type == "ADDRESS":
-                result = engine.scan_address(target, progress)
-            elif scan_type == "HASH":
-                result = engine.scan_hash(target, progress)
-            else:
-                print(f"Unsupported scan type: {scan_type}")
-                continue
-
-            # Display results
-            print(f"\nStatus: {result.status.value}")
-            print(f"Duration: {result.scan_duration:.2f}s")
-            print()
-
-            if result.info_rows:
-                print("Results:")
-                for row in result.info_rows:
-                    threat_marker = ""
-                    if row.threat_level:
-                        if row.threat_level.value in ["high", "critical"]:
-                            threat_marker = " [!]"
-                    print(f"  {row.label}: {row.value}{threat_marker}")
-                    if row.source:
-                        print(f"    (Source: {row.source})")
-            else:
-                print("No results found.")
-
-            if result.error_message:
-                print(f"\nError: {result.error_message}")
-
-        except KeyboardInterrupt:
-            print("\n\nGoodbye!")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-
-    return 0
-
-
-def check_dependencies():
-    """Check if required dependencies are available."""
-    missing_deps = []
-
-    try:
-        import curses
-    except ImportError:
-        missing_deps.append("curses")
-
-    try:
-        import requests
-    except ImportError:
-        missing_deps.append("requests")
-
-    if missing_deps:
-        print(f"Missing dependencies: {', '.join(missing_deps)}")
-        print("Install with: pip install -r requirements.txt")
-        return False
-
-    return True
-
+console = Console()
 
 def main():
-    """Main entry point with mode selection."""
-    # Check dependencies
-    if not check_dependencies():
-        return 1
+    parser = argparse.ArgumentParser(description="KISS - Keep It Simple Scanner")
+    parser.add_argument("target", nargs="?", help="Target to scan")
+    parser.add_argument("--list", "-l", action="store_true", help="List supported input types and API key status")
+    parser.add_argument("--list-modules", nargs="?", const="all", metavar="TYPE", help="List modules for an input type (e.g. --list-modules email)")
+    parser.add_argument("--set-key", nargs=2, metavar=("SERVICE", "KEY"), help="Set an API key (e.g. --set-key hibp YOUR_KEY)")
+    parser.add_argument("--proxy", metavar="URL", help="Proxy URL (e.g. socks5://127.0.0.1:9050)")
+    parser.add_argument("--set-proxy", metavar="URL", help="Save a default proxy URL")
 
-    # Try to determine best mode to run
-    try:
-        # Check if we're in a terminal that supports curses
-        if sys.stdout.isatty():
-            return run_curses_tui()
+    args = parser.parse_args()
+
+    if args.set_key:
+        service, key = args.set_key
+        config = get_config()
+        config.set(f"{service.lower()}_key", key)
+        console.print(f"[bold green]API key for '{service}' saved.[/bold green]")
+        return
+
+    if args.set_proxy is not None:
+        config = get_config()
+        if args.set_proxy.lower() in ("", "off", "none", "clear"):
+            config.set("proxy", None)
+            console.print("[bold green]Proxy cleared.[/bold green]")
         else:
-            print("Not a terminal, using simple mode")
-            return run_simple_tui()
-    except Exception as e:
-        logger.error(f"Startup error: {e}")
-        print("Failed to determine display mode, using simple mode")
-        return run_simple_tui()
+            config.set("proxy", args.set_proxy)
+            console.print(f"[bold green]Proxy saved: {args.set_proxy}[/bold green]")
+        return
 
+    try:
+        asyncio.run(async_main(args))
+    except KeyboardInterrupt:
+        console.print("\n[bold red][!] Scan interrupted by user.[/bold red]")
+        sys.exit(1)
+
+
+def _print_type_modules(type_name, modules):
+    """Print module list for a single type with status indicators."""
+    active = sum(1 for m in modules if m["status"] == "active")
+    total = len(modules)
+    count = f"{active}/{total}" if active < total else str(total)
+    console.print(f"[bold cyan]{type_name.upper()}[/bold cyan] [dim]{count} modules[/dim]")
+
+    for mod in modules:
+        returns = ", ".join(mod["returns"]) if mod["returns"] else ""
+        if mod["status"] == "locked":
+            console.print(f"  [dim]x {mod['name']}: {returns} (requires {mod['api_key']} key)[/dim]")
+        else:
+            console.print(f"  [green]+[/green] {mod['name']}: {returns}")
+
+
+async def async_main(args):
+    engine = KissEngine(proxy=getattr(args, 'proxy', None))
+
+    # Handle --list-modules [TYPE]
+    if args.list_modules:
+        caps = engine.get_capabilities()
+        type_filter = args.list_modules.lower()
+
+        if type_filter == "all":
+            for type_name, modules in caps.items():
+                _print_type_modules(type_name, modules)
+        elif type_filter in caps:
+            _print_type_modules(type_filter, caps[type_filter])
+        else:
+            valid = ", ".join(caps.keys())
+            console.print(f"[yellow]Unknown type '{type_filter}'. Available: {valid}[/yellow]")
+        await engine.close()
+        return
+
+    # Handle --list
+    if args.list:
+        print_banner()
+        config = get_config()
+        caps = engine.get_capabilities()
+
+        # Deduplicate module names across types for total count
+        all_names = set()
+        for modules in caps.values():
+            for mod in modules:
+                all_names.add(mod["name"])
+        console.print(f"[bold green]Supported Input Types: {len(caps)} | Total Modules: {len(all_names)}[/bold green]\n")
+
+        keys = {}
+        for type_name, modules in caps.items():
+            active = sum(1 for m in modules if m["status"] == "active")
+            total = len(modules)
+            count = f"{active}/{total}" if active < total else str(total)
+            console.print(f"  [bold cyan]{type_name.upper()}[/bold cyan] [dim]{count} modules[/dim]")
+            for mod in modules:
+                if mod["api_key"] and mod["api_key"] not in keys:
+                    keys[mod["api_key"]] = config.get_api_key(mod["api_key"]) is not None
+
+        if keys:
+            console.print()
+            console.print("[bold cyan]API KEYS[/bold cyan]")
+            for service, is_set in keys.items():
+                status = "[green]set[/green]" if is_set else "[red]missing[/red]"
+                console.print(f"  {service} {status}")
+        await engine.close()
+        return
+
+    # Handle Missing Target
+    if not args.target:
+        print_banner()
+        console.print("[yellow]Usage: kiss <target>[/yellow]")
+        console.print("[dim]Example: kiss user:admin[/dim]")
+        await engine.close()
+        return
+
+    # Handle Scan
+    print_banner()
+
+    with console.status(f"[bold green]Scanning {args.target}...[/bold green]", spinner="dots"):
+        report = await engine.scan(args.target)
+
+    print_results(report)
+    await engine.close()
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
