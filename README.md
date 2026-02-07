@@ -1,5 +1,8 @@
 **XSINT** — a minimal OSINT tool.
 
+![preview](preview.png)
+
+
 ## Example
 ```bash
                   "             m
