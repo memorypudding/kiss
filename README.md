@@ -2,58 +2,6 @@
 
 ![preview](preview.png)
 
-
-## Example
-```bash
-                  "             m
-  m   m   mmm   mmm    m mm   mm#mm
-   #m#   #   "    #    #"  #    #      By: Hollow
-   m#m    """m    #    #   #    #      v0.1.0
-  m" "m  "mmm"  mm#mm  #   #    "mm
- ╭─ [ SYSTEM ONLINE ]
- │
-[METAMON] 🐙 Added commits in 0.26s !
-
- ├─ 🌐 DNS
- │     Mail Server : gmail-smtp-in.l.google.com
- │     Provider    : Google Workspace
- │
- ├─ 👻 GHunt
- │      ╰─ 👤 Account
- │            Gaia ID       : 104632770280683490901
- │            Profile Photo : https://lh3.googleusercontent.com/a-/ALV-UjVa8aeap9TKyd9bx-1a3LJ9279hoW67ATmfM5uWrv-RjW0KfA
- │
- ├─ 🐙 GitFive
- │      ├─ 📧 Email
- │      │     Email Resolved : testtest@gmail.com → @ribo
- │      │
- │      ╰─ 👤 GitHub
- │            Username : ribo
- │            ID       : 64479
- │
- ├─ 🤖 Haxalot
- │     Status : Module locked (Run --set-key haxalot)
- │
- ├─ 🔍 IntelX
- │     IntelX : API key required. Get one at https://intelx.io
- │
- ╰─ ☢  9Ghz
-       Breaches : 191
-       Breach   : amai.com (2025-01-08)
-       Breach   : Stolplit.ru Database (2025-01-01)
-       Breach   : oropocket.com (2025-01-01)
-       Breach   : 1win.casino (2024-11-01)
-       Breach   : Ticketek Database (2024-05-01)
-       Breach   : leslipfrancais.fr (2024-04-01)
-       Breach   : boAt Lifestyle India Database (2024-03-01)
-       Breach   : AT&T 2021 Database (2024-03-01)
-       Breach   : Digido.ph Database (2024-02-01)
-       Breach   : LDLC Database (2024-02-01)
-       Note     : +181 more breaches
-
-```
-
-
 ## Installation
 
 ### No installation
