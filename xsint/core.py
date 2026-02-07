@@ -4,12 +4,23 @@ import aiohttp
 import importlib
 import os
 from collections import defaultdict
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from .parser import detect_target_type
 from .config import get_config
 
-VALID_TYPES = {"email", "username", "phone", "ip", "address", "hash", "name", "id", "ssn", "passport"}
+VALID_TYPES = {
+    "email",
+    "username",
+    "phone",
+    "ip",
+    "address",
+    "hash",
+    "name",
+    "id",
+    "ssn",
+    "passport",
+}
 
 
 def _parse_info(filepath):
@@ -24,7 +35,7 @@ def _parse_info(filepath):
     return None
 
 
-class KissEngine:
+class XsintEngine:
     def __init__(self, proxy=None):
         self.session = None
         self.proxy = proxy or get_config().get("proxy")
@@ -33,13 +44,38 @@ class KissEngine:
     async def get_session(self) -> aiohttp.ClientSession:
         if not self.session:
             if self.proxy:
-                import ssl
-                from aiohttp_socks import ProxyConnector
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
-                connector = ProxyConnector.from_url(self.proxy, ssl=ssl_context)
-                self.session = aiohttp.ClientSession(connector=connector)
+                try:
+                    # Validate and parse proxy URL
+                    from urllib.parse import urlparse
+
+                    parsed = urlparse(self.proxy)
+
+                    # Basic validation
+                    if not parsed.scheme or not parsed.netloc:
+                        raise ValueError(f"Invalid proxy URL format: {self.proxy}")
+
+                    # Extract port and validate it's numeric
+                    if ":" in parsed.netloc:
+                        host_port = parsed.netloc.rsplit(":", 1)
+                        if len(host_port) == 2:
+                            try:
+                                port = int(host_port[1])
+                                if not (1 <= port <= 65535):
+                                    raise ValueError(f"Proxy port out of range: {port}")
+                            except ValueError:
+                                raise ValueError(f"Invalid proxy port: {host_port[1]}")
+
+                    # ProxyConnector handles both HTTP and SOCKS proxies
+                    from aiohttp_socks import ProxyConnector
+
+                    connector = ProxyConnector.from_url(
+                        self.proxy, ssl=False, rdns=True
+                    )
+                    self.session = aiohttp.ClientSession(connector=connector)
+                except Exception as e:
+                    print(f"[!] Proxy configuration error: {e}")
+                    print(f"[!] Falling back to direct connection")
+                    self.session = aiohttp.ClientSession()
             else:
                 self.session = aiohttp.ClientSession()
         return self.session
@@ -64,10 +100,12 @@ class KissEngine:
                 continue
             if not info:
                 continue
-            modules.append({
-                "name": filename[:-3],
-                "info": info,
-            })
+            modules.append(
+                {
+                    "name": filename[:-3],
+                    "info": info,
+                }
+            )
         return modules
 
     def get_capabilities(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -95,17 +133,22 @@ class KissEngine:
                 else:
                     status = "locked"
 
-                caps[t].append({
-                    "name": mod["name"],
-                    "status": status,
-                    "api_key": api_key,
-                    "returns": info.get("returns", []),
-                })
+                caps[t].append(
+                    {
+                        "name": mod["name"],
+                        "status": status,
+                        "api_key": api_key,
+                        "returns": info.get("returns", []),
+                    }
+                )
 
         return dict(caps)
 
-    def _load_modules_for_type(self, target_type: str) -> List[Any]:
-        """Import modules that are active for the given type."""
+    def _load_modules_for_type(self, target_type: str) -> List[Tuple[Any, Dict]]:
+        """
+        Import modules that are active for the given type.
+        Returns a list of tuples: (run_function, info_dict)
+        """
         config = get_config()
         runners = []
 
@@ -124,9 +167,10 @@ class KissEngine:
                     continue
 
             try:
-                imported = importlib.import_module(f"kiss.modules.{mod['name']}")
+                imported = importlib.import_module(f"xsint.modules.{mod['name']}")
                 if hasattr(imported, "run") and callable(imported.run):
-                    runners.append(imported.run)
+                    # We return the function AND the info dict to extract themes later
+                    runners.append((imported.run, info))
             except Exception as e:
                 print(f"[!] Error loading module {mod['name']}: {e}")
 
@@ -141,6 +185,7 @@ class KissEngine:
             return {
                 "type": "AMBIGUOUS",
                 "results": [],
+                "themes": {},
                 "error": (
                     "Could not determine target type.\n"
                     "Please use a prefix to be specific:\n"
@@ -154,25 +199,49 @@ class KissEngine:
                     "  - ssn:123-45-6789\n"
                     "  - passport:AB1234567\n"
                     "  - hash:5f4dcc3b"
-                )
+                ),
             }
 
-        runners = self._load_modules_for_type(target_type)
-        if not runners:
+        runners_with_info = self._load_modules_for_type(target_type)
+        if not runners_with_info:
             return {
                 "type": target_type,
-                "results": [{"label": "Status", "value": "No modules found", "source": "System", "risk": "low"}],
-                "error": None
+                "results": [
+                    {
+                        "label": "Status",
+                        "value": "No modules found",
+                        "source": "System",
+                        "risk": "low",
+                    }
+                ],
+                "themes": {},
+                "error": None,
             }
 
         session = await self.get_session()
-        tasks = [func(session, clean_target) for func in runners]
+
+        # Prepare tasks and aggregate themes from module INFO dicts
+        tasks = []
+        collected_themes = {}
+
+        for func, info in runners_with_info:
+            tasks.append(func(session, clean_target))
+            if "themes" in info:
+                collected_themes.update(info["themes"])
+
         module_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         final_data = []
         for res in module_results:
             if isinstance(res, Exception):
-                final_data.append({"label": "Error", "value": str(res), "source": "System", "risk": "high"})
+                final_data.append(
+                    {
+                        "label": "Error",
+                        "value": str(res),
+                        "source": "System",
+                        "risk": "high",
+                    }
+                )
                 continue
             if isinstance(res, tuple) and len(res) == 2:
                 status, data = res
@@ -185,5 +254,6 @@ class KissEngine:
         return {
             "type": target_type,
             "results": final_data,
-            "error": None
+            "themes": collected_themes,  # Pass collected themes to the UI
+            "error": None,
         }

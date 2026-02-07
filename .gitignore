@@ -5,3 +5,5 @@ dist/
 build/
 config.json
 .env
+*.session
+*.session-journal

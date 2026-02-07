@@ -5,11 +5,14 @@ import re
 INFO = {
     "free": ["address"],
     "returns": ["address", "coordinates", "location type"],
+    "themes": {
+        "geopy": {"color": "green", "icon": "📍"}
+    }
 }
 
 async def run(session, target):
     async with Nominatim(
-        user_agent="KISS-OSINT",
+        user_agent="XSINT",
         adapter_factory=lambda proxies, ssl_context: AioHTTPAdapter(proxies=proxies, ssl_context=ssl_context)
     ) as geolocator:
 

@@ -3,6 +3,9 @@ import ipaddress
 INFO = {
     "free": ["ip"],
     "returns": ["version", "private/public"],
+    "themes": {
+        "StdLib": {"color": "green", "icon": "🔌"}
+    }
 }
 
 async def run(session, target):

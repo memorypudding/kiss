@@ -3,3 +3,8 @@ aiohttp
 aiohttp-socks
 phonenumbers
 hashid
+geopy
+httpx
+gitfive
+ghunt
+intelx
