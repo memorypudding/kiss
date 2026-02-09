@@ -72,6 +72,7 @@ git clone https://github.com/memorypudding/xsint.git && cd xsint && pip install 
 ```bash
 git clone https://github.com/memorypudding/xsint.git
 cd xsint
+pip install -r requirements.txt
 python3 -m xsint
 ```
 
