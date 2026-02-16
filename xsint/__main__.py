@@ -28,26 +28,40 @@ def _run_setup():
         console.print("    Install it with: [cyan]pip install pipx[/cyan]")
         return
 
-    # Find a suitable Python 3.10+ interpreter
+    # Find a suitable Python 3.10-3.13 interpreter
+    # Python 3.14+ is too new — compiled deps (pillow, levenshtein) don't support it yet
     python_bin = None
-    for candidate in ("python3.10", "python3.11", "python3.12", "python3.13", "python3.14", "python3"):
+    found_versions = []
+    for candidate in ("python3.10", "python3.11", "python3.12", "python3.13", "python3"):
         path = shutil.which(candidate)
         if not path:
             continue
         try:
             out = subprocess.check_output([path, "--version"], text=True).strip()
             # e.g. "Python 3.12.1"
-            parts = out.split()[1].split(".")
+            version_str = out.split()[1]
+            parts = version_str.split(".")
             major, minor = int(parts[0]), int(parts[1])
-            if major >= 3 and minor >= 10:
+            found_versions.append((path, major, minor, version_str))
+            if major == 3 and 10 <= minor <= 13:
                 python_bin = path
                 break
         except Exception:
             continue
 
     if not python_bin:
-        console.print("[bold red][!] No Python 3.10+ interpreter found.[/bold red]")
-        console.print("    GHunt and GitFive require Python 3.10 or newer.")
+        console.print("[bold red][!] No compatible Python interpreter found.[/bold red]")
+        console.print("    GHunt and GitFive require Python 3.10 to 3.13.")
+        if found_versions:
+            console.print("\n    [yellow]Detected interpreters:[/yellow]")
+            for path, major, minor, ver in found_versions:
+                reason = ""
+                if minor < 10:
+                    reason = " [dim](too old)[/dim]"
+                elif minor > 13:
+                    reason = " [dim](too new — deps don't support it yet)[/dim]"
+                console.print(f"      {path}: Python {ver}{reason}")
+        console.print("\n    Install a compatible version with: [cyan]brew install python@3.13[/cyan]")
         return
 
     console.print(f"[dim]Using interpreter: {python_bin}[/dim]\n")
