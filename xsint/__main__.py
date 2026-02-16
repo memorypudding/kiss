@@ -1,8 +1,88 @@
-import argparse
-import asyncio
+import os
 import shutil
 import subprocess
 import sys
+
+# --- Bootstrap: handle --setup before any third-party imports ---
+# This lets `python3.13 -m xsint --setup` work even when deps aren't installed yet.
+
+def _run_setup():
+    """Install xsint dependencies, ghunt, and gitfive."""
+    major, minor = sys.version_info[:2]
+    print(f"Current Python: {sys.executable} ({major}.{minor})\n")
+
+    if not (10 <= minor <= 13 and major == 3):
+        reason = "too old" if minor < 10 else "too new — deps don't support it yet"
+        print(f"[!] Python {major}.{minor} is {reason}.")
+        print("    GHunt and GitFive require Python 3.10 to 3.13.")
+        print("\n    Install a compatible version:")
+        print("      brew install python@3.13")
+        print("\n    Then re-run xsint under it:")
+        print("      python3.13 -m xsint --setup")
+        return
+
+    # Step 1: Install xsint's own requirements
+    req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "requirements.txt")
+    req_path = os.path.normpath(req_path)
+    if os.path.exists(req_path):
+        print("Installing xsint dependencies...")
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", req_path],
+            capture_output=False,
+        )
+        if result.returncode != 0:
+            print("\n[!] Failed to install xsint dependencies.")
+            return
+        print()
+
+    # Step 2: Install ghunt via pipx (for the `ghunt login` CLI)
+    pipx = shutil.which("pipx")
+    if not pipx:
+        print("[!] pipx is not installed.")
+        print("    Install it with: pip install pipx")
+        print("    Skipping pipx install of ghunt (CLI only).\n")
+    else:
+        print("Installing ghunt CLI (via pipx)...")
+        subprocess.run(
+            [pipx, "install", "ghunt", "--python", sys.executable, "--force"],
+            capture_output=False,
+        )
+        print()
+
+    # Step 3: Install ghunt + gitfive as libraries (via pip)
+    print("Installing ghunt + gitfive libraries (via pip)...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "ghunt", "gitfive"],
+        capture_output=False,
+    )
+    if result.returncode != 0:
+        print("\n[!] Failed to install ghunt/gitfive libraries.")
+        return
+    print()
+
+    # Step 4: Prompt to log in
+    login_cmds = [
+        ("ghunt", ["ghunt", "login"]),
+        ("gitfive", ["gitfive", "login"]),
+    ]
+    for name, cmd in login_cmds:
+        try:
+            answer = input(f"Log in to {name} now? (y/n): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if answer in ("y", "yes"):
+            subprocess.run(cmd)
+
+
+if "--setup" in sys.argv:
+    _run_setup()
+    sys.exit(0)
+
+
+# --- Normal imports (require installed deps) ---
+import argparse
+import asyncio
 from rich.console import Console
 from .core import XsintEngine
 from .config import get_config
@@ -12,72 +92,6 @@ from .ui import print_banner, print_results
 from .modules import haxalot_module
 
 console = Console()
-
-SETUP_TOOLS = [
-    {"name": "ghunt", "package": "ghunt"},
-    {"name": "gitfive", "package": "gitfive"},
-]
-
-
-def _run_setup():
-    """Install ghunt and gitfive via pipx (CLI) and pip (library)."""
-    major, minor = sys.version_info[:2]
-    console.print(f"[dim]Current Python: {sys.executable} ({major}.{minor})[/dim]\n")
-
-    if not (10 <= minor <= 13 and major == 3):
-        reason = "too old" if minor < 10 else "too new — deps don't support it yet"
-        console.print(f"[bold red][!] Python {major}.{minor} is {reason}.[/bold red]")
-        console.print("    GHunt and GitFive require Python 3.10 to 3.13.")
-        console.print("\n    [cyan]Install a compatible version:[/cyan]")
-        console.print("      brew install python@3.13")
-        console.print("\n    [cyan]Then re-run xsint under it:[/cyan]")
-        console.print("      python3.13 -m xsint --setup")
-        return
-
-    # Install ghunt via pipx (it has a CLI entry point for `ghunt login`)
-    pipx = shutil.which("pipx")
-    if not pipx:
-        console.print("[bold red][!] pipx is not installed.[/bold red]")
-        console.print("    Install it with: [cyan]pip install pipx[/cyan]")
-        return
-
-    console.print("[bold cyan]Installing ghunt (via pipx)...[/bold cyan]")
-    result = subprocess.run(
-        [pipx, "install", "ghunt", "--python", sys.executable, "--force"],
-        capture_output=False,
-    )
-    ghunt_ok = result.returncode == 0
-    if ghunt_ok:
-        console.print(f"[bold green]ghunt installed successfully.[/bold green]\n")
-    else:
-        console.print(f"[bold red]ghunt installation failed.[/bold red]\n")
-
-    # Install both ghunt and gitfive as libraries into xsint's environment
-    # so they can be imported at runtime
-    console.print("[bold cyan]Installing ghunt + gitfive libraries (via pip)...[/bold cyan]")
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "ghunt", "gitfive"],
-        capture_output=False,
-    )
-    if result.returncode == 0:
-        console.print(f"[bold green]Libraries installed successfully.[/bold green]\n")
-    else:
-        console.print(f"[bold red]Library installation failed.[/bold red]\n")
-        return
-
-    # Prompt to log in
-    login_cmds = [
-        ("ghunt", ["ghunt", "login"]),
-        ("gitfive", ["gitfive", "login"]),
-    ]
-    for name, cmd in login_cmds:
-        try:
-            answer = console.input(f"[bold yellow]Log in to {name} now? (y/n): [/bold yellow]").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            console.print()
-            break
-        if answer in ("y", "yes"):
-            subprocess.run(cmd)
 
 
 def main():
@@ -96,19 +110,19 @@ def main():
         metavar="TYPE",
         help="List modules for an input type (e.g. --list-modules email)",
     )
-    
+
     # UPDATED: Changed nargs to '+' to allow 1 arg (setup) or 2 args (api key)
     parser.add_argument(
         "--set-key",
-        nargs='+', 
+        nargs='+',
         metavar="ARGS",
         help="Set an API key (e.g. 'hibp YOUR_KEY') or setup a module (e.g. 'haxalot')",
     )
-    
+
     parser.add_argument(
         "--setup",
         action="store_true",
-        help="Install external tools (GHunt, GitFive) via pipx",
+        help="Install dependencies and external tools (GHunt, GitFive)",
     )
     parser.add_argument(
         "--proxy", metavar="URL", help="Proxy URL (e.g. socks5://127.0.0.1:9050)"
@@ -141,17 +155,12 @@ def main():
             console.print("  --proxy socks5://127.0.0.1:9050")
             sys.exit(1)
 
-    # --- HANDLER: --setup ---
-    if args.setup:
-        _run_setup()
-        return
-
     # --- HANDLER: --set-key ---
     if args.set_key:
         # Case 1: Module Setup (1 argument)
         if len(args.set_key) == 1:
             service = args.set_key[0].lower()
-            
+
             if service == "haxalot":
                 try:
                     asyncio.run(haxalot_module.setup())
@@ -172,7 +181,7 @@ def main():
             config.set(f"{service.lower()}_key", key)
             console.print(f"[bold green]API key for '{service}' saved.[/bold green]")
             return
-            
+
         else:
             console.print("[bold red]Invalid arguments for --set-key[/bold red]")
             console.print("Usage: --set-key SERVICE KEY  (or)  --set-key MODULE")
