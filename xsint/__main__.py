@@ -30,7 +30,7 @@ def _run_setup():
 
     # Find a suitable Python 3.10+ interpreter
     python_bin = None
-    for candidate in ("python3.10", "python3.11", "python3.12", "python3.13", "python3"):
+    for candidate in ("python3.10", "python3.11", "python3.12", "python3.13", "python3.14", "python3"):
         path = shutil.which(candidate)
         if not path:
             continue
