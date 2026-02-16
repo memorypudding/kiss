@@ -22,25 +22,20 @@
 ```bash
 git clone https://github.com/memorypudding/xsint.git
 cd xsint
-
-# One-command setup (creates a venv, installs everything)
-python3.13 -m xsint --setup
-
-# Then activate the venv and run
-source .venv/bin/activate
-xsint <target>
+./install.sh
 ```
 
-Or install manually:
+This will auto-detect a compatible Python (3.10–3.13), create a venv, install all dependencies (including GHunt + GitFive), and add a global `xsint` command to `~/.local/bin`.
+
+Or install locally for development:
 
 ```bash
 git clone https://github.com/memorypudding/xsint.git
 cd xsint
-python3.13 -m venv .venv
+python3.13 -m xsint --setup
+
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install ghunt gitfive
-python3 -m xsint
+xsint <target>
 ```
 
 ### Features
@@ -169,17 +164,9 @@ xsint --set-key haxalot
 xsint --list
 ```
 
-[GHunt](https://github.com/mxrch/GHunt) and [GitFive](https://github.com/mxrch/GitFive) require **Python 3.10-3.13** and must be installed separately:
+[GHunt](https://github.com/mxrch/GHunt) and [GitFive](https://github.com/mxrch/GitFive) require **Python 3.10–3.13** and are installed automatically by `./install.sh`. To log in after installation:
 
 ```bash
-# Automatic — run under a compatible Python
-python3.13 -m xsint --setup
-
-# Or install manually
-pipx install ghunt --python python3.13
-pip install ghunt gitfive
-
-# Then log in to each tool
 ghunt login
 gitfive login
 ```
