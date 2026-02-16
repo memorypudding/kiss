@@ -15,7 +15,7 @@ try:
     from ghunt.apis.peoplepa import PeoplePaHttp
     from ghunt import config as ghunt_config
     GHUNT_AVAILABLE = True
-except ImportError:
+except Exception:
     GHUNT_AVAILABLE = False
 
 INFO = {

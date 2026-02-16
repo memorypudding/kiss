@@ -169,10 +169,9 @@ class XsintEngine:
             try:
                 imported = importlib.import_module(f"xsint.modules.{mod['name']}")
                 if hasattr(imported, "run") and callable(imported.run):
-                    # We return the function AND the info dict to extract themes later
                     runners.append((imported.run, info))
-            except Exception as e:
-                print(f"[!] Error loading module {mod['name']}: {e}")
+            except Exception:
+                pass
 
         return runners
 

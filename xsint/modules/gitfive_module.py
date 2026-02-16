@@ -16,7 +16,7 @@ try:
     from gitfive.lib.objects import GitfiveRunner
     from gitfive import config as gitfive_config
     GITFIVE_AVAILABLE = True
-except ImportError:
+except Exception:
     GITFIVE_AVAILABLE = False
 
 INFO = {
