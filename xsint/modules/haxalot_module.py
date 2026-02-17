@@ -3,9 +3,13 @@ import time
 import re
 import sys
 import os
+import logging
 from bs4 import BeautifulSoup, NavigableString
 from telethon import TelegramClient
 from xsint.config import get_config
+
+# Keep Telethon retries/log noise out of CLI report output.
+logging.getLogger("telethon").setLevel(logging.ERROR)
 
 # Provided Credentials
 API_ID = 23268457
@@ -26,20 +30,39 @@ INFO = {
     }
 }
 
+def is_ready():
+    """
+    Module readiness gate used by the engine.
+    Haxalot is opt-in and requires both:
+    - successful setup marker in xsint config
+    - local Telegram session file
+    """
+    cfg = get_config()
+    if not cfg.get("haxalot_enabled", False):
+        return False, "run xsint --auth haxalot"
+    session_file = SESSION_NAME + ".session"
+    if os.path.isfile(session_file):
+        return True, ""
+    return False, "run xsint --auth haxalot"
+
 async def check_auth_state():
     """Non-interactive check to see if we have a valid session."""
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
     try:
-        await client.connect()
-        is_auth = await client.is_user_authorized()
-        await client.disconnect()
+        await asyncio.wait_for(client.connect(), timeout=4)
+        is_auth = await asyncio.wait_for(client.is_user_authorized(), timeout=4)
+        await asyncio.wait_for(client.disconnect(), timeout=2)
         return is_auth
     except Exception:
+        try:
+            await asyncio.wait_for(client.disconnect(), timeout=1)
+        except Exception:
+            pass
         return False
 
 async def setup():
     """
-    Interactive setup routine called by --set-key haxalot
+    Interactive setup routine called by --auth haxalot
     """
     print("\n[+] Haxalot Module Setup (Telegram)")
     print("-----------------------------------")
@@ -51,6 +74,7 @@ async def setup():
         await client.start()
         
         me = await client.get_me()
+        get_config().set("haxalot_enabled", True)
         print(f"\n[+] Successfully logged in as: {me.username}")
         print(f"[+] Session saved to: {os.path.abspath(SESSION_NAME + '.session')}")
         print("[+] Haxalot is now ready for use.")
@@ -59,7 +83,7 @@ async def lookup(query: str) -> str:
     # Connect using the existing session
     async with TelegramClient(SESSION_NAME, API_ID, API_HASH) as c:
         if not await c.is_user_authorized():
-            return "ERROR: Not authorized. Run 'python3 -m xsint --set-key haxalot'"
+            return "ERROR: Not authorized. Run 'python3 -m xsint --auth haxalot'"
 
         try:
             bot = await c.get_entity(BOT)
@@ -165,7 +189,8 @@ async def run(session, target):
     
     is_auth = await check_auth_state()
     if not is_auth:
-        return 0, [{"label": "Status", "value": "Module locked (Run --set-key haxalot)", "source": PARENT, "risk": "low"}]
+        get_config().set("haxalot_enabled", False)
+        return 0, [{"label": "Status", "value": "Module locked (Run --auth haxalot)", "source": PARENT, "risk": "low"}]
 
     try:
         html_content = await lookup(target)

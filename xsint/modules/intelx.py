@@ -3,12 +3,20 @@ import asyncio
 from xsint.config import get_config
 
 INFO = {
-    "free": ["email", "username", "phone"],
-    "paid": [],
+    "free": [],
+    "paid": ["email", "username", "phone"],
     "api_key": "intelx",
     "returns": ["breaches", "leaks", "pastes", "documents"],
     "themes": {"IntelX": {"color": "blue", "icon": "🔍"}},
 }
+
+
+def is_ready():
+    """IntelX is key-gated: do not run before key is configured."""
+    config = get_config()
+    if config.get_api_key("intelx"):
+        return True, ""
+    return False, "set intelx API key"
 
 async def run(session, target):
     results = []
@@ -18,14 +26,7 @@ async def run(session, target):
     api_key = config.get_api_key("intelx")
 
     if not api_key:
-        return 1, [
-            {
-                "label": "IntelX",
-                "value": "API key required. Get one at https://intelx.io",
-                "source": PARENT,
-                "risk": "low",
-            }
-        ]
+        return 0, []
 
     # Endpoints to try in order of privilege
     endpoints = [

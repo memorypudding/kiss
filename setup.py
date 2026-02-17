@@ -9,11 +9,13 @@ setup(
         "aiohttp",
         "aiohttp-socks",
         "rich",
+        "rich-argparse",
         "phonenumbers",
         "geopy",
         "hashid",
         "httpx",
         "intelx",
+        "telethon",
     ],
     entry_points={
         "console_scripts": [

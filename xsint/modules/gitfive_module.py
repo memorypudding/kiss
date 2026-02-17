@@ -2,8 +2,11 @@ import asyncio
 import httpx
 import re
 import json
-import sys
 import os
+import builtins
+import getpass
+import base64
+from pathlib import Path
 from contextlib import redirect_stdout, redirect_stderr
 
 from xsint.config import get_config
@@ -29,6 +32,58 @@ INFO = {
         "Email": {"color": "green", "icon": "📧"},
     },
 }
+
+LOGIN_TIMEOUT_SECONDS = 10
+
+
+def _decode_b64_json(path: Path):
+    if not path.is_file():
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8")
+        return json.loads(base64.b64decode(raw).decode())
+    except Exception:
+        return None
+
+
+def is_ready():
+    """
+    Module readiness gate used by the engine.
+    GitFive requires local creds/session created by `gitfive login`.
+    """
+    if not GITFIVE_AVAILABLE:
+        return False, "not installed"
+
+    base = Path.home() / ".malfrats" / "gitfive"
+    creds = _decode_b64_json(base / "creds.m") or {}
+    sess = _decode_b64_json(base / "session.m") or {}
+
+    has_creds = all([creds.get("username"), creds.get("password"), creds.get("token")])
+    has_session = bool(sess.get("user_session"))
+    if has_creds and has_session:
+        return True, ""
+    return False, "run xsint --auth gitfive"
+
+
+async def _login_non_interactive(runner):
+    """
+    Authenticate GitFive without prompting.
+    Prevents scans from blocking on credential input.
+    """
+    original_input = builtins.input
+    original_getpass = getpass.getpass
+
+    def _blocked_prompt(*args, **kwargs):
+        raise RuntimeError("interactive login is disabled during scan")
+
+    builtins.input = _blocked_prompt
+    getpass.getpass = _blocked_prompt
+    try:
+        with open(os.devnull, "w") as f, redirect_stdout(f), redirect_stderr(f):
+            await asyncio.wait_for(runner.login(), timeout=LOGIN_TIMEOUT_SECONDS)
+    finally:
+        builtins.input = original_input
+        getpass.getpass = original_getpass
 
 
 async def _scrape_commits(runner, repo_name, emails_index):
@@ -100,6 +155,15 @@ async def run(session, target):
             "risk": "low",
         }]
 
+    ready, hint = is_ready()
+    if not ready:
+        return 0, [{
+            "label": "Status",
+            "value": f"Not configured ({hint})",
+            "source": PARENT,
+            "risk": "low",
+        }]
+
     # FIX 1: Initialize this variable BEFORE the try block
     # This prevents "cannot access local variable" errors in the 'finally' block
     temp_repo_name = None
@@ -111,18 +175,6 @@ async def run(session, target):
     if gh_token:
         gitfive_config.tokens = [gh_token]
         gitfive_config.headers["Authorization"] = f"token {gh_token}"
-
-    # Monkey patch print to suppress DEBUG output from gitfive
-    original_print = print
-
-    def quiet_print(*args, **kwargs):
-        if args and isinstance(args[0], str) and "[DEBUG]" in args[0]:
-            return
-        original_print(*args, **kwargs)
-
-    import builtins
-
-    builtins.print = quiet_print
 
     try:
         runner = GitfiveRunner()
@@ -147,14 +199,14 @@ async def run(session, target):
 
         # 1. Login
         try:
-            await runner.login()
-        except Exception as e:
-            return 1, [
+            await _login_non_interactive(runner)
+        except Exception:
+            return 0, [
                 {
-                    "label": "Auth Error",
-                    "value": "Check 'github_token'",
+                    "label": "Status",
+                    "value": "Not logged in (run: xsint --auth gitfive)",
                     "source": PARENT,
-                    "risk": "high",
+                    "risk": "low",
                 }
             ]
 
@@ -331,9 +383,6 @@ async def run(session, target):
         ]
 
     finally:
-        # Restore original print function
-        builtins.print = original_print
-
         # 5. Cleanup
         # Since temp_repo_name is now defined outside the try block, this check is safe
         if temp_repo_name:

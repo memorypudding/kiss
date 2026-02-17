@@ -1,4 +1,5 @@
 rich
+rich-argparse
 aiohttp
 aiohttp-socks
 phonenumbers
@@ -6,3 +7,4 @@ hashid
 geopy
 httpx
 intelx
+telethon

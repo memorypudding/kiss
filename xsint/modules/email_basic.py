@@ -2,7 +2,8 @@ import httpx
 from xsint.config import get_config
 
 INFO = {
-    "free": ["email"],
+    # Disabled per UX preference: hide DNS provider/mx output from scans.
+    "free": [],
     "returns": ["mx records"],
     "themes": {
         "DNS": {"color": "blue", "icon": "🌐"}

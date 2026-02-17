@@ -17,7 +17,7 @@ dim()    { printf '\033[2m%s\033[0m\n' "$*"; }
 
 # --- Find a compatible Python (3.10–3.13) ---
 find_python() {
-    for cmd in python3.10 python3.11 python3.12 python3.13 python3; do
+    for cmd in python3.10 python3.11 python3.12 python3.13 python3 py python; do
         local p
         p=$(command -v "$cmd" 2>/dev/null) || continue
         local ver
@@ -84,20 +84,17 @@ cyan "Installing ghunt + gitfive..."
 "$VENV_PYTHON" -m pip install ghunt gitfive --quiet
 echo ""
 
-# --- Install ghunt CLI via pipx (for `ghunt login`) ---
-if command -v pipx &>/dev/null; then
-    cyan "Installing ghunt CLI (via pipx)..."
-    pipx install ghunt --python "$PYTHON" --force 2>/dev/null || true
-    echo ""
-else
-    dim "pipx not found — skipping ghunt CLI install."
-    dim "Install with: brew install pipx"
-    echo ""
-fi
+# We intentionally avoid relying on pipx for gitfive because current package
+# builds may not expose a direct app entrypoint. Instead, we create stable
+# wrappers bound to the selected interpreter/venv below.
 
-# --- Create global wrapper script ---
+# --- Create global wrapper scripts ---
 mkdir -p "$BIN_DIR"
 WRAPPER="$BIN_DIR/xsint"
+GHUNT_WRAPPER="$BIN_DIR/ghunt"
+GITFIVE_WRAPPER="$BIN_DIR/gitfive"
+
+rm -f "$WRAPPER" "$GHUNT_WRAPPER" "$GITFIVE_WRAPPER"
 
 cat > "$WRAPPER" << WRAPPER_EOF
 #!/usr/bin/env bash
@@ -105,7 +102,21 @@ exec "$VENV_PYTHON" -m xsint "\$@"
 WRAPPER_EOF
 chmod +x "$WRAPPER"
 
+cat > "$GHUNT_WRAPPER" << WRAPPER_EOF
+#!/usr/bin/env bash
+exec "$VENV_PYTHON" -m ghunt "\$@"
+WRAPPER_EOF
+chmod +x "$GHUNT_WRAPPER"
+
+cat > "$GITFIVE_WRAPPER" << WRAPPER_EOF
+#!/usr/bin/env bash
+exec "$VENV_PYTHON" -m gitfive "\$@"
+WRAPPER_EOF
+chmod +x "$GITFIVE_WRAPPER"
+
 green "Installed xsint to: $WRAPPER"
+green "Installed ghunt wrapper to: $GHUNT_WRAPPER"
+green "Installed gitfive wrapper to: $GITFIVE_WRAPPER"
 echo ""
 
 # --- Check if BIN_DIR is on PATH ---
@@ -115,22 +126,14 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo ""
 fi
 
-# --- Prompt to log in ---
-PIPX_GHUNT="$HOME/.local/pipx/venvs/ghunt/bin/ghunt"
-PIPX_GITFIVE="$HOME/.local/pipx/venvs/gitfive/bin/gitfive"
-
-for pair in "ghunt:$PIPX_GHUNT" "gitfive:$PIPX_GITFIVE"; do
-    tool="${pair%%:*}"
-    bin="${pair#*:}"
-    read -rp "Log in to $tool now? (y/n): " answer
+# --- Prompt to configure module credentials ---
+for tool in ghunt gitfive haxalot; do
+    read -rp "Configure $tool now? (y/n): " answer
     if [[ "$answer" =~ ^[Yy] ]]; then
-        if [ -x "$bin" ]; then
-            "$bin" login
-        elif command -v "$tool" &>/dev/null; then
-            "$tool" login
-        else
-            dim "$tool CLI not found — run '$tool login' manually after install."
-        fi
+        (
+            cd "$INSTALL_DIR"
+            "$VENV_PYTHON" -m xsint --auth "$tool"
+        )
     fi
 done
 
