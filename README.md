@@ -4,17 +4,31 @@
 
 ## Install
 
+Run the single cross-platform installer script:
+
 ```bash
 git clone https://github.com/memorypudding/xsint.git
 cd xsint
-./install.sh
+python3 installer.py
 ```
 
-`install.sh`:
+Windows example:
+
+```powershell
+git clone https://github.com/memorypudding/xsint.git
+cd xsint
+py -3 installer.py
+```
+
+The installer:
 - picks a compatible Python (3.10 to 3.13)
-- creates `~/.local/share/xsint/.venv`
-- installs `xsint` and dependencies
-- installs wrapper commands in `~/.local/bin`: `xsint`, `ghunt`, `gitfive`
+- copies files into a user install directory:
+  - macOS/Linux: `~/.local/share/xsint`
+  - Windows: `%LOCALAPPDATA%\xsint`
+- installs `xsint` and dependencies into the current user's Python environment (no venv required)
+- installs wrapper commands (`xsint`, `ghunt`, `gitfive`) into:
+  - macOS/Linux: `~/.local/bin`
+  - Windows: Python user `Scripts` directory
 
 ## Command usage
 
@@ -100,4 +114,4 @@ xsint --auth haxalot
 ## Notes
 
 - GHunt and GitFive require Python 3.10+.
-- If `~/.local/bin` is not in your `PATH`, add it in your shell profile.
+- If your wrapper bin directory is not in `PATH`, add it and reopen your terminal.
