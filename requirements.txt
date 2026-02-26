@@ -6,6 +6,7 @@ phonenumbers
 hashid
 geopy
 httpx
+lxml
 gitfive
 ghunt
 intelx
